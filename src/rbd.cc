@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -21,6 +21,7 @@
 #include "global/global_init.h"
 #include "common/safe_io.h"
 #include "common/secret.h"
+#include "include/stringify.h"
 #include "include/rados/librados.hpp"
 #include "include/rbd/librbd.hpp"
 #include "include/byteorder.h"
@@ -62,21 +63,22 @@ static string dir_info_oid = RBD_INFO;
 
 void usage()
 {
-  cout << 
+  cout <<
 "usage: rbd [-n <auth user>] [OPTIONS] <cmd> ...\n"
 "where 'pool' is a rados pool name (default is 'rbd') and 'cmd' is one of:\n"
-"  (ls | list) [pool-name]                     list rbd images\n"
+"  (ls | list) [-R | --recursive] [pool-name]  list rbd images\n"
+"                                              (-R includes snapshots)\n"
 "  info <image-name>                           show information about image size,\n"
 "                                              striping, etc.\n"
 "  create [--order <bits>] --size <MB> <name>  create an empty image\n"
 "  clone [--order <bits>] <parentsnap> <clonename>\n"
 "                                              clone a snapshot into a COW\n"
-"                                               child image\n"
+"                                              child image\n"
 "  resize --size <MB> <image-name>             resize (expand or contract) image\n"
 "  rm <image-name>                             delete an image\n"
 "  export <image-name> <path>                  export image to file\n"
 "  import <path> <image-name>                  import image from file\n"
-"                                              (dest defaults)\n"
+"                                              (dest defaults\n"
 "                                              as the filename part of file)\n"
 "  (cp | copy) <src> <dest>                    copy src image to dest\n"
 "  (mv | rename) <src> <dest>                  rename src image to dest\n"
@@ -121,7 +123,7 @@ void usage_exit()
 
 static string feature_str(uint64_t features)
 {
-  string s = ""; 
+  string s = "";
 
   if (features & RBD_FEATURE_LAYERING)
     s += "layering";
@@ -134,7 +136,7 @@ struct MyProgressContext : public librbd::ProgressContext {
 
   MyProgressContext(const char *o) : operation(o), last_pc(0) {
   }
-  
+
   int update_progress(uint64_t offset, uint64_t total) {
     int pc = total ? (offset * 100ull / total) : 0;
     if (pc != last_pc) {
@@ -154,15 +156,72 @@ struct MyProgressContext : public librbd::ProgressContext {
   }
 };
 
-static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx)
+static int do_list_snaps(librbd::Image &im, int indent);
+
+static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool rflag)
 {
   std::vector<string> names;
   int r = rbd.list(io_ctx, names);
   if (r < 0)
     return r;
 
-  for (std::vector<string>::const_iterator i = names.begin(); i != names.end(); i++)
-    cout << *i << std::endl;
+  if (!rflag) {
+    for (std::vector<string>::const_iterator i = names.begin();
+       i != names.end(); ++i) {
+      cout << *i << std::endl;
+    }
+    return 0;
+  }
+
+  typedef boost::tuple<string, size_t, string> imagedesc_t;
+  size_t namewidth = sizeof("NAME");
+  size_t sizewidth = sizeof("SIZE");
+  size_t parwidth = sizeof("PARENT");
+  ostringstream oss;
+  std::vector<imagedesc_t> imagedescs;
+  librbd::Image im;
+
+  for (std::vector<string>::const_iterator i = names.begin();
+       i != names.end(); ++i) {
+    ostringstream oss;
+    librbd::image_info_t info;
+    imagedesc_t imdesc;
+    imdesc.get<0>() = *i;
+    rbd.open(io_ctx, im, i->c_str());
+    if (im.stat(info, sizeof(info)) >= 0) {
+      imdesc.get<1>() = info.size;
+    }
+    string pool, image, snap;
+    if (im.parent_info(&pool, &image, &snap) >= 0) {
+      imdesc.get<2>() = pool + "/" + image + "@" + snap;
+    }
+
+    imagedescs.push_back(imdesc);
+    namewidth = max(imdesc.get<0>().length() + 1, namewidth);
+    sizewidth = max(stringify(prettybyte_t(imdesc.get<1>())).length() + 1,
+		    sizewidth);
+    parwidth = max(imdesc.get<2>().length() + 1, sizewidth);
+  }
+
+  cout << setw(namewidth) << left << "NAME"
+       << setw(sizewidth) << left << "SIZE"
+       << setw(parwidth) << left << "PARENT"
+       << std::endl;
+  for (std::vector<imagedesc_t>::const_iterator i =
+       imagedescs.begin(); i != imagedescs.end(); i++) {
+    // to preserve width, stringify the prettybyte_t rather than
+    // letting it output directly.  a forest of iomanip, oh my.
+    cout << setw(namewidth) << left << i->get<0>()
+	 << setw(sizewidth) << left << stringify(prettybyte_t(i->get<1>()))
+	 << setw(parwidth) << left << i->get<2>()
+	 << std::endl;
+    vector<librbd::snap_info_t> snaplist;
+    rbd.open(io_ctx, im, i->get<0>().c_str());
+    if (im.snap_list(snaplist) >= 0 && !snaplist.empty()) {
+      cout << "    snapshots:" << std::endl;
+      do_list_snaps(im, 4);
+    }
+  }
   return 0;
 }
 
@@ -171,7 +230,7 @@ static int do_create(librbd::RBD &rbd, librados::IoCtx& io_ctx,
 		     bool old_format, uint64_t features)
 {
   int r;
-  if (features == 0) 
+  if (features == 0)
     features = RBD_FEATURES_ALL;
 
   if (old_format)
@@ -184,7 +243,7 @@ static int do_create(librbd::RBD &rbd, librados::IoCtx& io_ctx,
 }
 
 static int do_clone(librbd::RBD &rbd, librados::IoCtx &p_ioctx,
-		    const char *p_name, const char *p_snapname, 
+		    const char *p_name, const char *p_snapname,
 		    librados::IoCtx &c_ioctx, const char *c_name,
 		    uint64_t features, int *c_order)
 {
@@ -242,7 +301,7 @@ static int do_show_info(const char *imgname, librbd::Image& image)
        << "\tfeatures: " << feature_str(features)
        << std::endl;
 
-  // parent info, if present 
+  // parent info, if present
   if ((image.parent_info(&parent_pool, &parent_name, &parent_snapname) == 0) &&
       parent_name.length() > 0) {
 
@@ -277,16 +336,33 @@ static int do_resize(librbd::Image& image, uint64_t size)
   return 0;
 }
 
-static int do_list_snaps(librbd::Image& image)
+static int do_list_snaps(librbd::Image& image, int indent)
 {
   std::vector<librbd::snap_info_t> snaps;
   int r = image.snap_list(snaps);
-  if (r < 0)
+  if (r < 0 || snaps.empty())
     return r;
 
-  cout << "ID\tNAME\t\tSIZE" << std::endl;
+  size_t namewidth = 5;
+  size_t sizewidth = 5;
   for (std::vector<librbd::snap_info_t>::iterator i = snaps.begin(); i != snaps.end(); ++i) {
-    cout << i->id << '\t' << i->name << '\t' << i->size << std::endl;
+    namewidth = max(i->name.length() + 1, namewidth);
+    sizewidth = max(stringify(prettybyte_t(i->size)).length() + 1, sizewidth);
+  }
+
+  for (int i = 0; i < indent; i++) {
+    cout << ' ';
+  }
+  cout << setw(5) << right << "ID" << setw(namewidth) << right << "NAME"
+       << setw(sizewidth) << right << "SIZE" << std::endl;
+  for (std::vector<librbd::snap_info_t>::iterator s = snaps.begin();
+       s != snaps.end(); ++s) {
+    for (int i = 0; i < indent; i++) {
+      cout << ' ';
+    }
+    cout << setw(5) << right << s->id << setw(namewidth) << right << s->name
+         << setw(sizewidth) << right << stringify(prettybyte_t(s->size))
+	 << std::endl;
   }
   return 0;
 }
@@ -556,7 +632,7 @@ static int do_import(librbd::RBD &rbd, librados::IoCtx& io_ctx,
       extent++;
       if (extent == fiemap->fm_mapped_extents)
         break;
-      
+
     } while (end_ofs == (off_t)fiemap->fm_extents[extent].fe_logical);
 
     //cerr << "rbd import file_pos=" << file_pos << " extent_len=" << extent_len << std::endl;
@@ -1017,6 +1093,7 @@ int main(int argc, const char **argv)
   bool old_format = true;
   uint64_t features = RBD_FEATURE_LAYERING;
   const char *imgname = NULL, *snapname = NULL, *destname = NULL, *dest_poolname = NULL, *dest_snapname = NULL, *path = NULL, *secretfile = NULL, *user = NULL, *devpath = NULL;
+  bool rflag = false;
 
   std::string val;
   std::ostringstream err;
@@ -1044,6 +1121,8 @@ int main(int argc, const char **argv)
 	exit(EXIT_FAILURE);
       }
       size = sizell << 20;   // bytes to MB
+    } else if (ceph_argparse_flag(args, i, "-R", "--recursive", (char*)NULL)) {
+      rflag = true;
     } else if (ceph_argparse_withint(args, i, &order, &err, "--order", (char*)NULL)) {
       if (!err.str().empty()) {
 	cerr << err.str() << std::endl;
@@ -1256,7 +1335,7 @@ int main(int argc, const char **argv)
 
   switch (opt_cmd) {
   case OPT_LIST:
-    r = do_list(rbd, io_ctx);
+    r = do_list(rbd, io_ctx, rflag);
     if (r < 0) {
       switch (r) {
       case -ENOENT:
@@ -1352,7 +1431,7 @@ int main(int argc, const char **argv)
       usage();
       exit(1);
     }
-    r = do_list_snaps(image);
+    r = do_list_snaps(image, 0);
     if (r < 0) {
       cerr << "failed to list snapshots: " << cpp_strerror(-r) << std::endl;
       exit(1);
