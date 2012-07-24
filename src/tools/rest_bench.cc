@@ -423,6 +423,18 @@ protected:
     return 0;
   }
 
+  int aio_remove(const std::string& oid, int slot) {
+    struct req_context *ctx = completions[slot];
+
+    ctx->get();
+    ctx->bucket_ctx = &bucket_ctx;
+    ctx->oid = oid;
+    ctx->op = OP_DELETE_OBJ;
+
+    dispatcher->queue(ctx);
+    return 0;
+  }
+
   int sync_read(const std::string& oid, bufferlist& bl, size_t len) {
     struct req_context *ctx = new req_context;
     int ret = ctx->init_ctx();
