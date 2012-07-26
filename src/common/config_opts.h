@@ -322,6 +322,7 @@ OPTION(osd_max_scrubs, OPT_INT, 1)
 OPTION(osd_scrub_load_threshold, OPT_FLOAT, 0.5)
 OPTION(osd_scrub_min_interval, OPT_FLOAT, 300)
 OPTION(osd_scrub_max_interval, OPT_FLOAT, 60*60*24)   // once a day
+OPTION(osd_deep_scrub_interval, OPT_FLOAT, 60*60*24*7) // once a week
 OPTION(osd_auto_weight, OPT_BOOL, false)
 OPTION(osd_class_error_timeout, OPT_DOUBLE, 60.0)  // seconds
 OPTION(osd_class_timeout, OPT_DOUBLE, 60*60.0) // seconds

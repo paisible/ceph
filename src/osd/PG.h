@@ -775,7 +775,8 @@ public:
       errors(0), fixed(0), active_rep_scrub(0),
       finalizing(false),
       is_chunky(false), start(hobject_t()), end(hobject_t()),
-      subset_last_update(eversion_t()), state(INACTIVE)
+      subset_last_update(eversion_t()), state(INACTIVE),
+      deep(false)
     {
     }
 
@@ -814,6 +815,9 @@ public:
       COMPARE_MAPS,
       FINISH,
     } state;
+
+    // deep scrub
+    bool deep;
 
     static const char *state_string(const PG::Scrubber::State& state) {
       const char *ret = NULL;
@@ -854,10 +858,12 @@ public:
   void scrub_finish();
   void scrub_clear_state();
   bool scrub_gather_replica_maps();
-  void _scan_list(ScrubMap &map, vector<hobject_t> &ls);
+  void _scan_list(ScrubMap &map, vector<hobject_t> &ls, bool deep);
   void _request_scrub_map(int replica, eversion_t version);
-  void _request_scrub_map(int replica, eversion_t version, hobject_t start, hobject_t end);
-  int build_scrub_map_chunk(ScrubMap &map, hobject_t start, hobject_t end);
+  void _request_scrub_map(int replica, eversion_t version,
+                          hobject_t start, hobject_t end, bool deep);
+  int build_scrub_map_chunk(ScrubMap &map,
+                            hobject_t start, hobject_t end, bool deep);
   void build_scrub_map(ScrubMap &map);
   void build_inc_scrub_map(ScrubMap &map, eversion_t v);
   virtual void _scrub(ScrubMap &map) { }
