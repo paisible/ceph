@@ -114,6 +114,9 @@ class ObjectCacher {
       ob(o),
       last_write_tid(0),
       error(0) {}
+    ~BufferHead() {
+      bl.release();
+    }
   
     // extent
     loff_t start() const { return ex.start; }
@@ -487,6 +490,7 @@ class ObjectCacher {
     flusher_cond.Signal();
     lock.Unlock();
     flusher_thread.join();
+    trim(0);
   }
 
 
