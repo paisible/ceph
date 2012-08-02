@@ -310,6 +310,11 @@ public:
       return *this;
     }
 
+    /**
+     * release all buffers in the list, and clear their state.
+     */
+    void release();
+
     const std::list<ptr>& buffers() const { return _buffers; }
     
     void swap(list& other);

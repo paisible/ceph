@@ -634,6 +634,15 @@ bool buffer_track_alloc = get_env_bool("CEPH_BUFFER_TRACK");
 
   // -- buffer::list --
 
+  void buffer::list::release()
+  {
+    for (std::list<ptr>::iterator it = _buffers.begin();
+	 it != _buffers.end(); ++it) {
+      it->release();
+    }
+    clear();
+  }
+
   void buffer::list::swap(list& other)
   {
     std::swap(_len, other._len);
