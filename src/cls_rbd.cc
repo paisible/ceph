@@ -918,17 +918,18 @@ static string parent_key(uint64_t poolid, string imageid, snapid_t snapid)
 }
 
 /**
- * XXX fix format
  * add child to rbd_children directory object
  *
  * rbd_children is a map of (p_poolid, p_imageid, p_snapid) to
  * [c_imageid, [c_imageid ... ]]
  *
- * input: p_poolid, p_imageid, p_snapid: parent identifiers
- * input: c_imageid: child identifier to add
+ * Input:
+ * @param p_poolid parent pool id
+ * @param p_imageid parent image oid
+ * @param p_snapid parent snapshot id
+ * @param c_imageid new child image oid to add
  *
- * return: -EINVAL on bad input param decode, -EIO on failure, 0 on success
- *
+ * @returns 0 on success, negative error on failure
  */
 
 int add_child(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
@@ -970,14 +971,15 @@ int add_child(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 }
 
 /**
- * XXX fix format
  * remove child from rbd_children directory object
  *
- * input: p_poolid, p_imageid, p_snapid: parent identifiers
- * input: c_imageid: child identifier to remove
+ * Input:
+ * @param p_poolid parent pool id
+ * @param p_imageid parent image oid
+ * @param p_snapid parent snapshot id
+ * @param c_imageid new child image oid to add
  *
- * return: -EINVAL on bad input param decode, -EIO on failure, 0 on success
- *
+ * @returns 0 on success, negative error on failure
  */
 
 int remove_child(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
@@ -1019,9 +1021,16 @@ int remove_child(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 }
 
 /**
- * XXX format
- * call with parent triple (poolid, imageid, snapid)
- * return: set of child imageids
+ * Input:
+ * @param p_poolid parent pool id
+ * @param p_imageid parent image oid
+ * @param p_snapid parent snapshot id
+ * @param c_imageid new child image oid to add
+ *
+ * Output:
+ * @param children set<string> of children
+ *
+ * @returns 0 on success, negative error on failure
  */
 int get_children(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
