@@ -628,6 +628,13 @@ namespace librbd {
       lderr(cct) << "couldn't set parent: " << r << dendl;
       goto err_close_child;
     }
+
+    r = cls_client::add_child(&c_ioctx, RBD_CHILDREN, p_poolid, p_imctx->id,
+			      p_imctx->snap_id, c_imctx->id);
+    if (r < 0) {
+      lderr(cct) << "couldn't add child: " << r << dendl;
+      goto err_close_child;
+    }
     ldout(cct, 2) << "done." << dendl;
     close_image(c_imctx);
     close_image(p_imctx);
@@ -926,6 +933,10 @@ namespace librbd {
       id = ictx->id;
       ictx->md_lock.Lock();
       trim_image(ictx, 0, prog_ctx);
+
+      uint64_t p_poolid = ictx->parent_md.pool_id;
+      string p_imageid = ictx->parent_md.image_id;
+      snapid_t p_snapid = ictx->parent_md.snap_id;
       ictx->md_lock.Unlock();
       close_image(ictx);
 
@@ -966,6 +977,13 @@ namespace librbd {
       if (r < 0) {
 	lderr(cct) << "error removing img from new-style directory: "
 		   << cpp_strerror(-r) << dendl;
+	return r;
+      }
+      ldout(cct, 2) << "removing child from children list..." << dendl;
+      int r = cls_client::remove_child(&io_ctx, RBD_CHILDREN,
+				       p_poolid, p_imageid, p_snapid, id);
+      if (r < 0) {
+	lderr(cct) << "error removing child from children list" << dendl;
 	return r;
       }
     }
