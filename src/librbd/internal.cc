@@ -433,6 +433,20 @@ namespace librbd {
     if (r < 0)
       return r;
 
+    // If there are no more snapshots, and the base image has no parent,
+    // that could be because the parent was flattened before the snapshots
+    // were removed.  Try removing the child, but ignore -ENOENT in case
+    // it's not present.  XXX this can't happen, because we can't remove the
+    // parent if there were other snaps.  We need per-snap parent info to
+    // resolve this.
+    if (ictx->snaps.empty() && (ictx->parent_md.pool_id == -1)) {
+      r = cls_client::remove_child(&ictx->md_ctx, RBD_CHILDREN,
+				   ictx->parent_md.pool_id,
+				   ictx->parent_md.image_id,
+				   ictx->parent_md.snap_id, ictx->id);
+      if ((r < 0) && (r != -ENOENT))
+	return r;
+    }
     notify_change(ictx->md_ctx, ictx->header_oid, NULL, ictx);
 
     ictx->perfcounter->inc(l_librbd_snap_remove);
