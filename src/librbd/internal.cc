@@ -1594,7 +1594,24 @@ namespace librbd {
       ofs += cblksize;
     }
 
-    r = cls_client::remove_parent(&ictx->md_ctx, ictx->header_oid);
+    // if this is the base image, and has no snapshots, we can sever the
+    // parent/child link completely.
+    if ((ictx->snap_id == CEPH_NOSNAP) && ictx->snaps.empty()) {
+      ldout(ictx->cct, 2) << "removing child from children list..." << dendl;
+      int r = cls_client::remove_child(&ictx->md_ctx, RBD_CHILDREN,
+				       ictx->parent_md.pool_id,
+				       ictx->parent_md.image_id,
+				       ictx->parent_md.snap_id, ictx->id);
+      if (r < 0) {
+	lderr(ictx->cct) << "error removing child from children list" << dendl;
+	return r;
+      }
+      r = cls_client::remove_parent(&ictx->md_ctx, ictx->header_oid);
+      if (r < 0) {
+	lderr(ictx->cct) << "error removing parent" << dendl;
+	return r;
+      }
+    }
     notify_change(ictx->md_ctx, ictx->header_oid, NULL, ictx);
 
     ldout(ictx->cct, 20) << "finished flattening" << dendl;
