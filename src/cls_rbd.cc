@@ -1011,12 +1011,19 @@ int remove_child(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   // find and remove child
   children.erase(c_imageid);
 
-  // write back
-  bufferlist childbl;
-  ::encode(children, childbl);
-  r = cls_cxx_map_set_val(hctx, key, &childbl);
-  if (r < 0)
-    CLS_LOG(20, "remove_child: write omap failed: %d ", r);
+  // now empty?  remove entry altogether
+  if (children.empty()) {
+    r = cls_cxx_map_remove_key(hctx, key);
+    if (r < 0)
+      CLS_LOG(20, "remove_child: remove key failed: %d", r);
+  } else {
+    // write back shortened children list
+    bufferlist childbl;
+    ::encode(children, childbl);
+    r = cls_cxx_map_set_val(hctx, key, &childbl);
+    if (r < 0)
+      CLS_LOG(20, "remove_child: write omap failed: %d ", r);
+  }
   return r;
 }
 
