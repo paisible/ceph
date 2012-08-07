@@ -932,6 +932,9 @@ namespace librbd {
     bool old_format = false;
     bool unknown_format = true;
     ImageCtx *ictx = new ImageCtx(imgname, "", NULL, io_ctx);
+    uint64_t p_poolid;
+    string p_imageid;
+    snapid_t p_snapid;
     int r = open_image(ictx, true);
     if (r < 0) {
       ldout(cct, 2) << "error opening image: " << cpp_strerror(-r) << dendl;
@@ -948,9 +951,9 @@ namespace librbd {
       ictx->md_lock.Lock();
       trim_image(ictx, 0, prog_ctx);
 
-      uint64_t p_poolid = ictx->parent_md.pool_id;
-      string p_imageid = ictx->parent_md.image_id;
-      snapid_t p_snapid = ictx->parent_md.snap_id;
+      p_poolid = ictx->parent_md.pool_id;
+      p_imageid = ictx->parent_md.image_id;
+      p_snapid = ictx->parent_md.snap_id;
       ictx->md_lock.Unlock();
       close_image(ictx);
 
