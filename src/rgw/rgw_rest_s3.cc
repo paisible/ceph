@@ -39,6 +39,20 @@ void dump_bucket(struct req_state *s, RGWBucketEnt& obj)
   s->formatter->close_section();
 }
 
+void rgw_get_errno_s3(rgw_html_errors *e , int err_no)
+{
+  const struct rgw_html_errors *r;
+  r = search_err(err_no, RGW_HTML_ERRORS, ARRAY_LEN(RGW_HTML_ERRORS));
+
+  if (r) {
+    e->http_ret = r->http_ret;
+    e->s3_code = r->s3_code;
+  } else {
+    e->http_ret = 500;
+    e->s3_code = "UnknownError";
+  }
+}
+
 int RGWGetObj_REST_S3::send_response(bufferlist& bl)
 {
   string content_type_str;
@@ -579,6 +593,55 @@ void RGWListBucketMultiparts_REST_S3::send_response()
   flush_formatter_to_req_state(s, s->formatter);
 }
 
+void RGWDeleteMultiObj_REST_S3::send_response()
+{
+  if (ret < 0)
+    set_req_state_err(s, ret);
+  dump_errno(s);
+  end_header(s, "application/xml");
+
+  if (ret < 0)
+    return;
+
+  dump_start(s);
+  s->formatter->open_object_section_in_ns("DeleteResult",
+                                          "http://s3.amazonaws.com/doc/2006-03-01/");
+
+  for (map<string,int>::iterator it = results.begin();
+      it != results.end(); it++) {
+
+    if (it->second == 0 && !quiet) {
+      s->formatter->open_object_section("Deleted");
+      s->formatter->dump_string("Key", it->first);
+      s->formatter->close_section();
+    }
+  }
+
+  if (!errors.empty()) {
+    struct rgw_html_errors *r = new rgw_html_errors;
+    int err_no;
+
+    for (map<string,int>::iterator it = errors.begin();
+        it != errors.end(); it++) {
+
+      s->formatter->open_object_section("Error");
+
+      err_no = -(it->second);
+      rgw_get_errno_s3(r, err_no);
+
+
+      s->formatter->dump_string("Key", it->first);
+      s->formatter->dump_int("Code", r->http_ret);
+      s->formatter->dump_string("Message", r->s3_code);
+      s->formatter->close_section();
+    }
+  }
+
+  s->formatter->close_section();
+  flush_formatter_to_req_state(s, s->formatter);
+}
+
+
 RGWOp *RGWHandler_REST_S3::get_retrieve_obj_op(bool get_data)
 {
   if (is_acl_op()) {
@@ -653,6 +716,10 @@ RGWOp *RGWHandler_REST_S3::get_post_op()
       return new RGWCompleteMultipart_REST_S3;
     else
       return new RGWInitMultipart_REST_S3;
+  }
+  else if ( s->request_params == "delete" ) {
+    return new RGWDeleteMultiObj_REST_S3;
+    return NULL;
   }
 
   return NULL;
