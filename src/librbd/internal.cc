@@ -1657,9 +1657,17 @@ namespace librbd {
       ofs += cblksize;
     }
 
-    // if this is the base image, and has no snapshots, we can sever the
-    // parent/child link completely.
-    if ((ictx->snap_id == CEPH_NOSNAP) && ictx->snaps.empty()) {
+    // remove parent from this (base) image
+    r = cls_client::remove_parent(&ictx->md_ctx, ictx->header_oid);
+    if (r < 0) {
+      lderr(ictx->cct) << "error removing parent" << dendl;
+      return r;
+    }
+
+    // and if there are no snaps, remove from the children object as well
+    // (if snapshots remain, they have their own parent info, and the child
+    // will be removed when the last snap goes away)
+    if (ictx->snaps.empty()) {
       ldout(ictx->cct, 2) << "removing child from children list..." << dendl;
       int r = cls_client::remove_child(&ictx->md_ctx, RBD_CHILDREN,
 				       ictx->parent_md.pool_id,
@@ -1667,11 +1675,6 @@ namespace librbd {
 				       ictx->parent_md.snap_id, ictx->id);
       if (r < 0) {
 	lderr(ictx->cct) << "error removing child from children list" << dendl;
-	return r;
-      }
-      r = cls_client::remove_parent(&ictx->md_ctx, ictx->header_oid);
-      if (r < 0) {
-	lderr(ictx->cct) << "error removing parent" << dendl;
 	return r;
       }
     }
