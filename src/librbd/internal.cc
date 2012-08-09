@@ -430,6 +430,7 @@ namespace librbd {
     // remove the child from the child list.
     if (ictx->snaps.size() == 1 && (ictx->parent_md.pool_id == -1)) {
       SnapInfo *snapinfo;
+      Mutex::Locker l(ictx->snap_lock);
       r = ictx->get_snapinfo(snap_id, &snapinfo);
       if (r < 0)
 	return r;
