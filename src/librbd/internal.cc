@@ -434,12 +434,14 @@ namespace librbd {
       r = ictx->get_snapinfo(snap_id, &snapinfo);
       if (r < 0)
 	return r;
-      r = cls_client::remove_child(&ictx->md_ctx, RBD_CHILDREN,
-				   snapinfo->parent.pool_id,
-				   snapinfo->parent.image_id,
-				   snapinfo->parent.snap_id, ictx->id);
-      if (r < 0)
-	return r;
+      if (snapinfo->parent.pool_id != -1) {
+	r = cls_client::remove_child(&ictx->md_ctx, RBD_CHILDREN,
+				     snapinfo->parent.pool_id,
+				     snapinfo->parent.image_id,
+				     snapinfo->parent.snap_id, ictx->id);
+	if (r < 0)
+	  return r;
+      }
     }
     r = rm_snap(ictx, snap_name);
     if (r < 0)
