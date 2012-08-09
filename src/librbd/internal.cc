@@ -977,11 +977,13 @@ namespace librbd {
       id = ictx->id;
       ictx->md_lock.Lock();
       trim_image(ictx, 0, prog_ctx);
+      ictx->md_lock.Unlock();
 
+      ictx->parent_lock.Lock();
       p_poolid = ictx->parent_md.pool_id;
       p_imageid = ictx->parent_md.image_id;
       p_snapid = ictx->parent_md.snap_id;
-      ictx->md_lock.Unlock();
+      ictx->parent_lock.Unlock();
       close_image(ictx);
 
       ldout(cct, 2) << "removing header..." << dendl;
