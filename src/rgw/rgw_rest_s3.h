@@ -168,7 +168,7 @@ public:
   RGWHandler_REST_S3() : RGWHandler_REST() {}
   virtual ~RGWHandler_REST_S3() {}
 
-  virtual int init(struct req_state *state, FCGX_Request *fcgx);
+  virtual int init(RGWRados *store, struct req_state *state, FCGX_Request *fcgx);
   int authorize();
 };
 
