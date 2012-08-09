@@ -1499,8 +1499,8 @@ namespace librbd {
 
   int _snap_set(ImageCtx *ictx, const char *snap_name)
   {
-    Mutex::Locker l1(ictx->parent_lock);
-    Mutex::Locker l2(ictx->snap_lock);
+    Mutex::Locker l1(ictx->snap_lock);
+    Mutex::Locker l2(ictx->parent_lock);
     int r;
     if ((snap_name != NULL) && (strlen(snap_name) != 0)) {
       r = ictx->snap_set(snap_name);
