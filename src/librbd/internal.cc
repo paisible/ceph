@@ -631,7 +631,7 @@ namespace librbd {
       goto err_close_parent;
     }
 
-    uint64_t p_poolid;
+    int64_t p_poolid;
     p_poolid = p_ioctx.get_id();
 
     c_imctx = new ImageCtx(c_name, "", NULL, c_ioctx);
@@ -959,7 +959,7 @@ namespace librbd {
     bool old_format = false;
     bool unknown_format = true;
     ImageCtx *ictx = new ImageCtx(imgname, "", NULL, io_ctx);
-    uint64_t p_poolid;
+    int64_t p_poolid = -1;
     string p_imageid;
     snapid_t p_snapid;
     int r = open_image(ictx, true);
