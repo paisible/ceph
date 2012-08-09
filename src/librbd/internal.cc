@@ -1497,7 +1497,13 @@ namespace librbd {
   {
     Mutex::Locker l1(ictx->parent_lock);
     Mutex::Locker l2(ictx->snap_lock);
-    int r = ictx->snap_set(snap_name);
+    int r;
+    if ((snap_name != NULL) && (strlen(snap_name) != 0)) {
+      r = ictx->snap_set(snap_name);
+    } else {
+      ictx->snap_unset();
+      r = 0;
+    }
     if (r < 0) {
       return r;
     }
@@ -1512,11 +1518,7 @@ namespace librbd {
     // ignore return value, since we may be set to a non-existent
     // snapshot and the user is trying to fix that
     ictx_check(ictx);
-    if (snap_name)
-      return _snap_set(ictx, snap_name);
-    else
-      return 0;
-
+    return _snap_set(ictx, snap_name);
   }
 
   int open_image(ImageCtx *ictx, bool watch)
@@ -1536,9 +1538,7 @@ namespace librbd {
     if (r < 0)
       return r;
 
-    if (ictx->snap_name.length()) {
-      _snap_set(ictx, ictx->snap_name.c_str());
-    }
+    _snap_set(ictx, ictx->snap_name.c_str());
 
     if (watch) {
       r = ictx->register_watch();
