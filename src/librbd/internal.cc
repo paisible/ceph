@@ -986,6 +986,15 @@ namespace librbd {
       ictx->parent_lock.Unlock();
       close_image(ictx);
 
+      if (p_poolid != -1) {
+	ldout(cct, 2) << "removing child from children list..." << dendl;
+	int r = cls_client::remove_child(&io_ctx, RBD_CHILDREN,
+					 p_poolid, p_imageid, p_snapid, id);
+	if (r < 0) {
+	  lderr(cct) << "error removing child from children list" << dendl;
+	  return r;
+	}
+      }
       ldout(cct, 2) << "removing header..." << dendl;
       r = io_ctx.remove(header_oid);
       if (r < 0 && r != -ENOENT) {
@@ -1025,14 +1034,7 @@ namespace librbd {
 		   << cpp_strerror(-r) << dendl;
 	return r;
       }
-      ldout(cct, 2) << "removing child from children list..." << dendl;
-      int r = cls_client::remove_child(&io_ctx, RBD_CHILDREN,
-				       p_poolid, p_imageid, p_snapid, id);
-      if (r < 0) {
-	lderr(cct) << "error removing child from children list" << dendl;
-	return r;
-      }
-    }
+    } 
 
     ldout(cct, 2) << "done." << dendl;
     return 0;
