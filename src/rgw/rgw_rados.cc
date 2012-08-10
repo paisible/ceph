@@ -57,6 +57,14 @@ static RGWObjCategory main_category = RGW_OBJ_CATEGORY_MAIN;
 void RGWRadosParams::init_default()
 {
   domain_root = ".rgw";
+  control_pool = ".rgw.control";
+  log_pool = ".log";
+  intent_log_pool = ".intent-log";
+  usage_log_pool = ".usage";
+  user_keys_pool = ".users";
+  user_email_pool = ".users.email";
+  user_swift_pool = ".users.swift";
+  user_uid_pool = ".users.uid";
 }
 
 
@@ -193,15 +201,16 @@ int RGWRados::open_root_pool_ctx()
 
 int RGWRados::init_watch()
 {
-  int r = rados->ioctx_create(RGW_CONTROL_BUCKET, control_pool_ctx);
+  const char *control_pool = params.control_pool.name.c_str();
+  int r = rados->ioctx_create(control_pool, control_pool_ctx);
   if (r == -ENOENT) {
-    r = rados->pool_create(RGW_CONTROL_BUCKET);
+    r = rados->pool_create(control_pool);
     if (r == -EEXIST)
       r = 0;
     if (r < 0)
       return r;
 
-    r = rados->ioctx_create(RGW_CONTROL_BUCKET, control_pool_ctx);
+    r = rados->ioctx_create(control_pool, control_pool_ctx);
     if (r < 0)
       return r;
   }
@@ -321,7 +330,8 @@ struct log_list_state {
 int RGWRados::log_list_init(const string& prefix, RGWAccessHandle *handle)
 {
   log_list_state *state = new log_list_state;
-  int r = rados->ioctx_create(RGW_LOG_POOL_NAME, state->io_ctx);
+  const char *log_pool = params.log_pool.name.c_str();
+  int r = rados->ioctx_create(log_pool, state->io_ctx);
   if (r < 0)
     return r;
   state->prefix = prefix;
@@ -353,7 +363,8 @@ int RGWRados::log_list_next(RGWAccessHandle handle, string *name)
 int RGWRados::log_remove(const string& name)
 {
   librados::IoCtx io_ctx;
-  int r = rados->ioctx_create(RGW_LOG_POOL_NAME, io_ctx);
+  const char *log_pool = params.log_pool.name.c_str();
+  int r = rados->ioctx_create(log_pool, io_ctx);
   if (r < 0)
     return r;
   return io_ctx.remove(name);
@@ -372,7 +383,8 @@ struct log_show_state {
 int RGWRados::log_show_init(const string& name, RGWAccessHandle *handle)
 {
   log_show_state *state = new log_show_state;
-  int r = rados->ioctx_create(RGW_LOG_POOL_NAME, state->io_ctx);
+  const char *log_pool = params.log_pool.name.c_str();
+  int r = rados->ioctx_create(log_pool, state->io_ctx);
   if (r < 0)
     return r;
   state->name = name;
@@ -2762,17 +2774,18 @@ int RGWRados::cls_obj_usage_log_add(const string& oid, rgw_usage_log_info& info)
 {
   librados::IoCtx io_ctx;
 
-  int r = rados->ioctx_create(RGW_USAGE_LOG_POOL_NAME, io_ctx);
+  const char *usage_log_pool = params.usage_log_pool.name.c_str();
+  int r = rados->ioctx_create(usage_log_pool, io_ctx);
   if (r == -ENOENT) {
     string id;
     map<std::string, bufferlist> attrs;
-    rgw_bucket pool(RGW_USAGE_LOG_POOL_NAME);
+    rgw_bucket pool(usage_log_pool);
     r = create_bucket(id, pool, attrs, true);
     if (r < 0)
       return r;
  
     // retry
-    r = rados->ioctx_create(RGW_USAGE_LOG_POOL_NAME, io_ctx);
+    r = rados->ioctx_create(usage_log_pool, io_ctx);
   }
   if (r < 0)
     return r;
@@ -2792,7 +2805,8 @@ int RGWRados::cls_obj_usage_log_read(string& oid, string& user, uint64_t start_e
 
   *is_truncated = false;
 
-  int r = rados->ioctx_create(RGW_USAGE_LOG_POOL_NAME, io_ctx);
+  const char *usage_log_pool = params.usage_log_pool.name.c_str();
+  int r = rados->ioctx_create(usage_log_pool, io_ctx);
   if (r < 0)
     return r;
 
@@ -2825,7 +2839,8 @@ int RGWRados::cls_obj_usage_log_trim(string& oid, string& user, uint64_t start_e
 {
   librados::IoCtx io_ctx;
 
-  int r = rados->ioctx_create(RGW_USAGE_LOG_POOL_NAME, io_ctx);
+  const char *usage_log_pool = params.usage_log_pool.name.c_str();
+  int r = rados->ioctx_create(usage_log_pool, io_ctx);
   if (r < 0)
     return r;
 
@@ -2972,7 +2987,6 @@ int RGWRados::remove_temp_objects(string date, string time)
   }
   time_t epoch = mktime(&tm);
 
-  rgw_bucket bucket(RGW_INTENT_LOG_POOL_NAME);
   string prefix, delim, marker;
   vector<RGWObjEnt> objs;
   map<string, bool> common_prefixes;
@@ -2981,7 +2995,7 @@ int RGWRados::remove_temp_objects(string date, string time)
   bool is_truncated;
   IntentLogNameFilter filter(date.c_str(), &tm);
   RGWPoolIterCtx iter_ctx;
-  int r = pool_iterate_begin(bucket, iter_ctx);
+  int r = pool_iterate_begin(params.intent_log_pool, iter_ctx);
   if (r < 0) {
     cerr << "failed to list objects" << std::endl;
     return r;
@@ -2996,7 +3010,7 @@ int RGWRados::remove_temp_objects(string date, string time)
     }
     vector<RGWObjEnt>::iterator iter;
     for (iter = objs.begin(); iter != objs.end(); ++iter) {
-      process_intent_log(bucket, (*iter).name, epoch, I_DEL_OBJ | I_DEL_DIR, true);
+      process_intent_log(params.intent_log_pool, (*iter).name, epoch, I_DEL_OBJ | I_DEL_DIR, true);
     }
   } while (is_truncated);
 
