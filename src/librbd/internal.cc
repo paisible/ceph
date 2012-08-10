@@ -959,9 +959,6 @@ namespace librbd {
     bool old_format = false;
     bool unknown_format = true;
     ImageCtx *ictx = new ImageCtx(imgname, "", NULL, io_ctx);
-    int64_t p_poolid = -1;
-    string p_imageid;
-    snapid_t p_snapid;
     int r = open_image(ictx, true);
     if (r < 0) {
       ldout(cct, 2) << "error opening image: " << cpp_strerror(-r) << dendl;
@@ -980,16 +977,17 @@ namespace librbd {
       ictx->md_lock.Unlock();
 
       ictx->parent_lock.Lock();
-      p_poolid = ictx->parent_md.pool_id;
-      p_imageid = ictx->parent_md.image_id;
-      p_snapid = ictx->parent_md.snap_id;
+      // struct assignment
+      cls_client::parent_info parent_info = ictx->parent_md;
       ictx->parent_lock.Unlock();
       close_image(ictx);
 
-      if (p_poolid != -1) {
+      if (parent_info.pool_id != -1) {
 	ldout(cct, 2) << "removing child from children list..." << dendl;
 	int r = cls_client::remove_child(&io_ctx, RBD_CHILDREN,
-					 p_poolid, p_imageid, p_snapid, id);
+					 parent_info.pool_id,
+					 parent_info.image_id,
+					 parent_info.snap_id, id);
 	if (r < 0) {
 	  lderr(cct) << "error removing child from children list" << dendl;
 	  return r;
