@@ -151,33 +151,17 @@ struct RGWObjState {
 };
 
 struct RGWRadosCtx {
+  RGWRados *store;
   map<rgw_obj, RGWObjState> objs_state;
   int (*intent_cb)(RGWRados *store, void *user_ctx, rgw_obj& obj, RGWIntentEvent intent);
   void *user_ctx;
-  RGWObjState *get_state(rgw_obj& obj) {
-    if (obj.object.size()) {
-      return &objs_state[obj];
-    } else {
-      rgw_obj new_obj(rgw_root_bucket, obj.bucket.name);
-      return &objs_state[new_obj];
-    }
-  }
-  void set_atomic(rgw_obj& obj) {
-    if (obj.object.size()) {
-      objs_state[obj].is_atomic = true;
-    } else {
-      rgw_obj new_obj(rgw_root_bucket, obj.bucket.name);
-      objs_state[new_obj].is_atomic = true;
-    }
-  }
-  void set_prefetch_data(rgw_obj& obj) {
-    if (obj.object.size()) {
-      objs_state[obj].prefetch_data = true;
-    } else {
-      rgw_obj new_obj(rgw_root_bucket, obj.bucket.name);
-      objs_state[new_obj].prefetch_data = true;
-    }
-  }
+
+  RGWRadosCtx(RGWRados *_store) : store(_store) { }
+
+  RGWObjState *get_state(rgw_obj& obj);
+  void set_atomic(rgw_obj& obj);
+  void set_prefetch_data(rgw_obj& obj);
+
   void set_intent_cb(int (*cb)(RGWRados *store, void *user_ctx, rgw_obj& obj, RGWIntentEvent intent)) {
     intent_cb = cb;
   }
@@ -193,6 +177,12 @@ struct RGWRadosCtx {
 struct RGWPoolIterCtx {
   librados::IoCtx io_ctx;
   librados::ObjectIterator iter;
+};
+
+struct RGWRadosParams {
+  rgw_bucket domain_root;
+
+  void init_default();
 };
   
 class RGWRados
@@ -222,7 +212,6 @@ class RGWRados
       rados->tick();
     }
   };
-
 
   int num_watchers;
   RGWWatcher **watchers;
@@ -283,6 +272,9 @@ protected:
 public:
   RGWRados() : lock("rados_timer_lock"), timer(NULL), num_watchers(0), watchers(NULL), watch_handles(NULL),
                bucket_id_lock("rados_bucket_id"), max_bucket_id(0) {}
+
+  RGWRadosParams params;
+
   virtual ~RGWRados() {}
 
   void tick();
@@ -527,7 +519,7 @@ public:
   void pick_control_oid(const string& key, string& notify_oid);
 
   void *create_context(void *user_ctx) {
-    RGWRadosCtx *rctx = new RGWRadosCtx();
+    RGWRadosCtx *rctx = new RGWRadosCtx(this);
     rctx->user_ctx = user_ctx;
     return rctx;
   }

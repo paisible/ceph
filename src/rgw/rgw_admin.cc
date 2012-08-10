@@ -581,7 +581,7 @@ static int remove_shadow_file_eventually(RGWRados *store, void *user_ctx, rgw_ob
 static int remove_object(rgw_bucket& bucket, std::string& object, bool delete_object_tail_later)
 {
   int ret = -EINVAL;
-  RGWRadosCtx *rctx = new RGWRadosCtx();
+  RGWRadosCtx *rctx = new RGWRadosCtx(store);
   rgw_obj obj(bucket,object);
 
   if (delete_object_tail_later)
@@ -605,7 +605,6 @@ static int remove_bucket(rgw_bucket& bucket, bool delete_children, bool delete_o
   RGWBucketInfo info;
   bufferlist bl;
 
-  static rgw_bucket pi_buckets_rados = RGW_ROOT_BUCKET;
   ret = store->get_bucket_stats(bucket, stats);
   if (ret < 0)
     return ret;
@@ -613,7 +612,7 @@ static int remove_bucket(rgw_bucket& bucket, bool delete_children, bool delete_o
   obj.bucket = bucket;
   int max = 1000;
 
-  ret = rgw_get_obj(store, NULL, pi_buckets_rados, bucket.name, bl, NULL);
+  ret = rgw_get_obj(store, NULL, store->params.domain_root, bucket.name, bl, NULL);
 
   bufferlist::iterator iter = bl.begin();
   try {
